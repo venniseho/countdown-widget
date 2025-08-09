@@ -6,15 +6,16 @@
 <title>Countdown Widget</title>
 <style>
   :root{
-    --bg:#f4f2fb;
-    --card:#5b3ef0;          /* main purple */
+    --bg:#f9f8fc;             
+    --card:#bfaef5;           /* pastel purple main */
     --card-ink:#ffffff;
-    --muted:#6f6b7a;
+    --muted:#8c88a3;
     --ink:#1a102a;
-    --accent:#7d5cff;        /* lighter purple */
-    --ring:rgba(123,97,255,.35);
+    --accent:#d2c6fb;         /* light accent */
+    --ring:rgba(191,174,245,.35); /* pastel ring */
     --radius:14px;
   }
+  
   *{box-sizing:border-box}
   html,body{height:100%}
   body{
@@ -135,3 +136,147 @@
     editTitle: document.getElementById('editTitle'),
     openSettings: document.getElementById('openSettings'),
     settings: document.getElementById('settings'),
+    dt: document.getElementById('dt'),
+    save: document.getElementById('save'),
+    cancel: document.getElementById('cancel'),
+    cards: document.getElementById('cards'),
+    done: document.getElementById('done'),
+  };
+
+  // --- state & load/save ---
+  const defaults = {
+    title: "New Year",
+    // Default target: upcoming Jan 1 at 00:00
+    targetISO: nextNewYearISO()
+  };
+  const state = load() || defaults;
+
+  function nextNewYearISO(){
+    const now = new Date();
+    const year = now.getMonth() === 0 && now.getDate() === 1 ? now.getFullYear()+1 : now.getFullYear()+1;
+    const d = new Date(year, 0, 1, 0, 0, 0);
+    return toLocalDatetimeValue(d);
+  }
+
+  function load(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    }catch(_){ return null; }
+  }
+  function save(){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+
+  // --- title editing ---
+  function enableTitleEdit(){
+    el.titleInput.value = state.title || "";
+    el.title.style.display = "none";
+    el.titleInput.style.display = "inline-block";
+    el.titleInput.focus();
+    el.titleInput.select();
+  }
+  function commitTitle(){
+    const v = el.titleInput.value.trim();
+    state.title = v || "Countdown";
+    el.title.textContent = state.title;
+    el.title.style.display = "block";
+    el.titleInput.style.display = "none";
+    save();
+  }
+  el.editTitle.addEventListener('click', enableTitleEdit);
+  el.title.addEventListener('click', enableTitleEdit);
+  el.titleInput.addEventListener('keydown', e=>{
+    if(e.key === 'Enter') commitTitle();
+    if(e.key === 'Escape'){ el.titleInput.value = state.title; commitTitle(); }
+  });
+  el.titleInput.addEventListener('blur', commitTitle);
+
+  // --- settings modal ---
+  function toLocalDatetimeValue(date){
+    const pad=n=>String(n).padStart(2,'0');
+    // Local datetime-local expects "YYYY-MM-DDTHH:MM"
+    return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+  function fromLocalDatetimeValue(str){
+    // Construct as local time
+    const [d,t] = str.split('T');
+    const [y,m,day] = d.split('-').map(Number);
+    const [hh,mm] = (t||"00:00").split(':').map(Number);
+    return new Date(y, (m||1)-1, day||1, hh||0, mm||0, 0, 0);
+  }
+
+  el.openSettings.addEventListener('click', ()=>{
+    el.dt.value = state.targetISO || toLocalDatetimeValue(new Date());
+    el.settings.showModal();
+  });
+  el.cancel.addEventListener('click', ()=> el.settings.close());
+  el.save.addEventListener('click', ()=>{
+    const v = el.dt.value;
+    if(v){
+      state.targetISO = v;
+      save();
+      el.settings.close();
+      tick(); // update immediately
+    }
+  });
+
+  // --- countdown math (months/days/hours/mins/secs) ---
+  function diffParts(now, target){
+    if(target <= now) return { months:0, days:0, hours:0, minutes:0, seconds:0, done:true };
+
+    // months difference (calendar months)
+    let months = (target.getFullYear() - now.getFullYear())*12 + (target.getMonth() - now.getMonth());
+    // If target's day is less than current day, we haven't completed the month
+    const tmp = new Date(now.getFullYear(), now.getMonth() + months, now.getDate(), now.getHours(), now.getMinutes(), now.getSeconds());
+    if (tmp > target) months--;
+
+    // subtract months from target to get remainder delta
+    const afterMonths = new Date(now.getFullYear(), now.getMonth() + months, now.getDate(), now.getHours(), now.getMinutes(), now.getSeconds());
+    let ms = target - afterMonths;
+    if(ms < 0){ months--; ms = target - new Date(now.getFullYear(), now.getMonth() + months, now.getDate(), now.getHours(), now.getMinutes(), now.getSeconds()); }
+
+    const sec = Math.floor(ms/1000);
+    const days = Math.floor(sec / 86400);
+    const hours = Math.floor((sec % 86400)/3600);
+    const minutes = Math.floor((sec % 3600)/60);
+    const seconds = Math.floor(sec % 60);
+
+    return { months, days, hours, minutes, seconds, done:false };
+  }
+
+  // --- render ---
+  function render(parts){
+    el.cards.innerHTML = '';
+    const units = [
+      {k:'months', s:'m'},
+      {k:'days', s:'d'},
+      {k:'hours', s:'h'},
+      {k:'minutes', s:'m'},
+      {k:'seconds', s:'s'}
+    ];
+    units.forEach(u=>{
+      const v = parts[u.k];
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `<div class="value">${v}</div><div class="label">${u.s}</div>`;
+      el.cards.appendChild(card);
+    });
+    el.done.style.display = parts.done ? 'block' : 'none';
+  }
+
+  function tick(){
+    el.title.textContent = state.title;
+    const target = fromLocalDatetimeValue(state.targetISO || toLocalDatetimeValue(new Date()));
+    const now = new Date();
+    const parts = diffParts(now, target);
+    render(parts);
+  }
+
+  // --- boot ---
+  tick();
+  setInterval(tick, 1000);
+})();
+</script>
+</body>
+</html>
