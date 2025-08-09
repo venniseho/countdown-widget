@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Countdown Widget</title>
+<style>
+  :root{
+    --bg:#f4f2fb;
+    --card:#5b3ef0;          /* main purple */
+    --card-ink:#ffffff;
+    --muted:#6f6b7a;
+    --ink:#1a102a;
+    --accent:#7d5cff;        /* lighter purple */
+    --ring:rgba(123,97,255,.35);
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    background:var(--bg);
+    color:var(--ink);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .widget{
+    width:min(560px, 92vw);
+    background:#fff;
+    border-radius:20px;
+    box-shadow: 0 8px 24px rgba(21,16,55,.08);
+    padding:18px 18px 22px;
+    border:1px solid rgba(93,63,240,.08);
+  }
+  /* top bar */
+  .top{
+    display:flex; align-items:center; justify-content:space-between;
+    gap:12px; margin-bottom:14px;
+  }
+  .title-wrap{display:flex; align-items:center; gap:10px; min-height:36px}
+  .emoji{font-size:22px}
+  .title{
+    font-size:20px; font-weight:700; letter-spacing:.2px;
+  }
+  .title-input{
+    font-size:18px; padding:6px 10px; border-radius:10px; border:1px solid #e8e6f5; outline:none;
+    box-shadow:0 0 0 0 transparent; width:220px;
+  }
+  .title-input:focus{border-color:var(--accent); box-shadow:0 0 0 6px var(--ring)}
+  .icon-btn{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:34px; height:34px; border:none; border-radius:10px;
+    background:#fff; cursor:pointer; color:var(--muted);
+    box-shadow: 0 0 0 1px #eee;
+  }
+  .icon-btn:hover{color:var(--accent); box-shadow:0 0 0 1px var(--accent)}
+  .spacer{flex:1}
+
+  /* countdown row */
+  .row{
+    display:flex; gap:10px; flex-wrap:wrap; justify-content:center;
+  }
+  .card{
+    min-width:70px; padding:14px 10px; text-align:center;
+    background:var(--card); color:var(--card-ink);
+    border-radius:var(--radius);
+  }
+  .value{ font-weight:800; font-size:20px; line-height:1 }
+  .label{ font-size:12px; opacity:.92; margin-top:6px; text-transform:uppercase; letter-spacing:.12em }
+
+  .done{
+    text-align:center; color:var(--muted); font-weight:600; padding:10px 0 2px;
+  }
+
+  /* modal */
+  dialog{
+    border:none; border-radius:16px; padding:18px; width:min(440px, 92vw);
+    box-shadow: 0 20px 40px rgba(26,16,60,.18);
+  }
+  dialog::backdrop{background:rgba(15,10,30,.25)}
+  .modal-title{font-weight:700; margin:2px 0 10px}
+  .field{display:flex; flex-direction:column; gap:6px; margin:10px 0 14px}
+  input[type="datetime-local"]{
+    padding:10px 12px; border-radius:12px; border:1px solid #e7e4f6; outline:none;
+    font-size:15px;
+  }
+  input[type="datetime-local"]:focus{border-color:var(--accent); box-shadow:0 0 0 6px var(--ring)}
+  .modal-actions{display:flex; gap:8px; justify-content:flex-end; margin-top:6px}
+  .btn{
+    padding:10px 14px; border-radius:12px; border:1px solid #e7e4f6; background:#fff; cursor:pointer;
+    font-weight:600;
+  }
+  .btn.primary{background:var(--card); color:#fff; border-color:var(--card)}
+  .hint{color:var(--muted); font-size:12px}
+</style>
+</head>
+<body>
+  <div class="widget" id="widget">
+    <div class="top">
+      <div class="title-wrap">
+        <div class="emoji" aria-hidden="true">🎉</div>
+        <div id="title" class="title">New Year</div>
+        <input id="titleInput" class="title-input" style="display:none" />
+        <button id="editTitle" class="icon-btn" title="Edit title" aria-label="Edit title">✏︎</button>
+      </div>
+      <div class="spacer"></div>
+      <button id="openSettings" class="icon-btn" title="Edit date/time" aria-label="Edit date/time">⚙︎</button>
+    </div>
+
+    <div class="row" id="cards" aria-live="polite" aria-atomic="true">
+      <!-- cards injected here -->
+    </div>
+    <div id="done" class="done" style="display:none">Time's up 🎯</div>
+  </div>
+
+  <dialog id="settings">
+    <div class="modal-title">Target date &amp; time</div>
+    <div class="field">
+      <label for="dt">When should we count down to?</label>
+      <input id="dt" type="datetime-local" />
+      <div class="hint">Uses your local timezone. Saved on this device.</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="cancel">Cancel</button>
+      <button class="btn primary" id="save">Save</button>
+    </div>
+  </dialog>
+
+<script>
+(function(){
+  const STORAGE_KEY = "minimal-countdown-v1";
+  const el = {
+    title: document.getElementById('title'),
+    titleInput: document.getElementById('titleInput'),
+    editTitle: document.getElementById('editTitle'),
+    openSettings: document.getElementById('openSettings'),
+    settings: document.getElementById('settings'),
