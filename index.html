@@ -7,15 +7,14 @@
 <style>
   :root{
     --bg:#f9f8fc;             
-    --card:#bfaef5;           /* pastel purple main */
+    --card:#bfaef5;           
     --card-ink:#ffffff;
     --muted:#8c88a3;
     --ink:#1a102a;
-    --accent:#d2c6fb;         /* light accent */
-    --ring:rgba(191,174,245,.35); /* pastel ring */
+    --accent:#d2c6fb;         
+    --ring:rgba(191,174,245,.35);
     --radius:14px;
   }
-  
   *{box-sizing:border-box}
   html,body{height:100%}
   body{
@@ -29,9 +28,9 @@
     width:min(560px, 92vw);
     background:#fff;
     border-radius:20px;
-    box-shadow: 0 8px 24px rgba(21,16,55,.08);
+    box-shadow: 0 6px 18px rgba(21,16,55,.06);
     padding:18px 18px 22px;
-    border:1px solid rgba(93,63,240,.08);
+    border:1px solid rgba(93,63,240,.05);
   }
   /* top bar */
   .top{
@@ -39,7 +38,12 @@
     gap:12px; margin-bottom:14px;
   }
   .title-wrap{display:flex; align-items:center; gap:10px; min-height:36px}
-  .emoji{font-size:22px}
+  .emoji{font-size:22px; cursor:pointer}
+  .emoji-input{
+    font-size:18px; padding:6px 10px; border-radius:10px; border:1px solid #e8e6f5; outline:none;
+    width:48px; text-align:center;
+  }
+  .emoji-input:focus{border-color:var(--accent); box-shadow:0 0 0 6px var(--ring)}
   .title{
     font-size:20px; font-weight:700; letter-spacing:.2px;
   }
@@ -76,7 +80,7 @@
   /* modal */
   dialog{
     border:none; border-radius:16px; padding:18px; width:min(440px, 92vw);
-    box-shadow: 0 20px 40px rgba(26,16,60,.18);
+    box-shadow: 0 20px 40px rgba(26,16,60,.12);
   }
   dialog::backdrop{background:rgba(15,10,30,.25)}
   .modal-title{font-weight:700; margin:2px 0 10px}
@@ -99,18 +103,17 @@
   <div class="widget" id="widget">
     <div class="top">
       <div class="title-wrap">
-        <div class="emoji" aria-hidden="true">🎉</div>
+        <div id="emoji" class="emoji">🎉</div>
+        <input id="emojiInput" class="emoji-input" style="display:none" maxlength="2" />
         <div id="title" class="title">New Year</div>
         <input id="titleInput" class="title-input" style="display:none" />
-        <button id="editTitle" class="icon-btn" title="Edit title" aria-label="Edit title">✏︎</button>
+        <button id="editTitle" class="icon-btn" title="Edit title">✏︎</button>
       </div>
       <div class="spacer"></div>
-      <button id="openSettings" class="icon-btn" title="Edit date/time" aria-label="Edit date/time">⚙︎</button>
+      <button id="openSettings" class="icon-btn" title="Edit date/time">⚙︎</button>
     </div>
 
-    <div class="row" id="cards" aria-live="polite" aria-atomic="true">
-      <!-- cards injected here -->
-    </div>
+    <div class="row" id="cards"></div>
     <div id="done" class="done" style="display:none">Time's up 🎯</div>
   </div>
 
@@ -129,8 +132,10 @@
 
 <script>
 (function(){
-  const STORAGE_KEY = "minimal-countdown-v1";
+  const STORAGE_KEY = "minimal-countdown-v2";
   const el = {
+    emoji: document.getElementById('emoji'),
+    emojiInput: document.getElementById('emojiInput'),
     title: document.getElementById('title'),
     titleInput: document.getElementById('titleInput'),
     editTitle: document.getElementById('editTitle'),
@@ -143,42 +148,37 @@
     done: document.getElementById('done'),
   };
 
-  // --- state & load/save ---
   const defaults = {
+    emoji: "🎉",
     title: "New Year",
-    // Default target: upcoming Jan 1 at 00:00
     targetISO: nextNewYearISO()
   };
   const state = load() || defaults;
 
   function nextNewYearISO(){
     const now = new Date();
-    const year = now.getMonth() === 0 && now.getDate() === 1 ? now.getFullYear()+1 : now.getFullYear()+1;
-    const d = new Date(year, 0, 1, 0, 0, 0);
-    return toLocalDatetimeValue(d);
+    const year = now.getFullYear() + 1;
+    return toLocalDatetimeValue(new Date(year, 0, 1, 0, 0, 0));
   }
 
   function load(){
     try{
-      const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : null;
-    }catch(_){ return null; }
+      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || null;
+    }catch{ return null; }
   }
   function save(){
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }
 
-  // --- title editing ---
+  // Title edit
   function enableTitleEdit(){
-    el.titleInput.value = state.title || "";
+    el.titleInput.value = state.title;
     el.title.style.display = "none";
     el.titleInput.style.display = "inline-block";
     el.titleInput.focus();
-    el.titleInput.select();
   }
   function commitTitle(){
-    const v = el.titleInput.value.trim();
-    state.title = v || "Countdown";
+    state.title = el.titleInput.value.trim() || "Countdown";
     el.title.textContent = state.title;
     el.title.style.display = "block";
     el.titleInput.style.display = "none";
@@ -192,60 +192,71 @@
   });
   el.titleInput.addEventListener('blur', commitTitle);
 
-  // --- settings modal ---
+  // Emoji edit
+  function enableEmojiEdit(){
+    el.emojiInput.value = state.emoji;
+    el.emoji.style.display = "none";
+    el.emojiInput.style.display = "inline-block";
+    el.emojiInput.focus();
+  }
+  function commitEmoji(){
+    state.emoji = el.emojiInput.value.trim() || "🎯";
+    el.emoji.textContent = state.emoji;
+    el.emoji.style.display = "block";
+    el.emojiInput.style.display = "none";
+    save();
+  }
+  el.emoji.addEventListener('click', enableEmojiEdit);
+  el.emojiInput.addEventListener('keydown', e=>{
+    if(e.key === 'Enter') commitEmoji();
+    if(e.key === 'Escape'){ el.emojiInput.value = state.emoji; commitEmoji(); }
+  });
+  el.emojiInput.addEventListener('blur', commitEmoji);
+
+  // Settings modal
   function toLocalDatetimeValue(date){
     const pad=n=>String(n).padStart(2,'0');
-    // Local datetime-local expects "YYYY-MM-DDTHH:MM"
     return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
   }
   function fromLocalDatetimeValue(str){
-    // Construct as local time
     const [d,t] = str.split('T');
     const [y,m,day] = d.split('-').map(Number);
     const [hh,mm] = (t||"00:00").split(':').map(Number);
-    return new Date(y, (m||1)-1, day||1, hh||0, mm||0, 0, 0);
+    return new Date(y, (m||1)-1, day||1, hh||0, mm||0, 0);
   }
 
   el.openSettings.addEventListener('click', ()=>{
-    el.dt.value = state.targetISO || toLocalDatetimeValue(new Date());
+    el.dt.value = state.targetISO;
     el.settings.showModal();
   });
   el.cancel.addEventListener('click', ()=> el.settings.close());
   el.save.addEventListener('click', ()=>{
-    const v = el.dt.value;
-    if(v){
-      state.targetISO = v;
-      save();
-      el.settings.close();
-      tick(); // update immediately
-    }
+    state.targetISO = el.dt.value;
+    save();
+    el.settings.close();
+    tick();
   });
 
-  // --- countdown math (months/days/hours/mins/secs) ---
+  // Countdown
   function diffParts(now, target){
     if(target <= now) return { months:0, days:0, hours:0, minutes:0, seconds:0, done:true };
-
-    // months difference (calendar months)
     let months = (target.getFullYear() - now.getFullYear())*12 + (target.getMonth() - now.getMonth());
-    // If target's day is less than current day, we haven't completed the month
     const tmp = new Date(now.getFullYear(), now.getMonth() + months, now.getDate(), now.getHours(), now.getMinutes(), now.getSeconds());
     if (tmp > target) months--;
-
-    // subtract months from target to get remainder delta
     const afterMonths = new Date(now.getFullYear(), now.getMonth() + months, now.getDate(), now.getHours(), now.getMinutes(), now.getSeconds());
     let ms = target - afterMonths;
     if(ms < 0){ months--; ms = target - new Date(now.getFullYear(), now.getMonth() + months, now.getDate(), now.getHours(), now.getMinutes(), now.getSeconds()); }
-
     const sec = Math.floor(ms/1000);
-    const days = Math.floor(sec / 86400);
-    const hours = Math.floor((sec % 86400)/3600);
-    const minutes = Math.floor((sec % 3600)/60);
-    const seconds = Math.floor(sec % 60);
-
-    return { months, days, hours, minutes, seconds, done:false };
+    return {
+      months,
+      days: Math.floor(sec / 86400),
+      hours: Math.floor((sec % 86400)/3600),
+      minutes: Math.floor((sec % 3600)/60),
+      seconds: Math.floor(sec % 60),
+      done:false
+    };
   }
 
-  // --- render ---
   function render(parts){
     el.cards.innerHTML = '';
     const units = [
@@ -266,14 +277,13 @@
   }
 
   function tick(){
+    el.emoji.textContent = state.emoji;
     el.title.textContent = state.title;
-    const target = fromLocalDatetimeValue(state.targetISO || toLocalDatetimeValue(new Date()));
-    const now = new Date();
-    const parts = diffParts(now, target);
-    render(parts);
+    const target = fromLocalDatetimeValue(state.targetISO);
+    render(diffParts(new Date(), target));
   }
 
-  // --- boot ---
+  // Init
   tick();
   setInterval(tick, 1000);
 })();
